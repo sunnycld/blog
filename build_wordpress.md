@@ -1,0 +1,201 @@
+# 使用 openresty & wordpress 搭建个人博客
+
+## 简介
+
+这是我第一次接触 openresty 并安装它，写这篇文章的目的就是记录下安装 openresty 的过程与经验。我的操作系统是 Ubuntu 14.04 server 。
+
+## 环境准备
+
+要搭建我们的博客，需要以下几样“原料”：
+
+- 虚拟主机
+- 域名
+- mysql
+- php
+- openresty
+- wordpress
+
+## 虚拟主机
+
+目前主流的虚拟主机有阿里云和腾讯云，当然也有其他的一些提供虚拟主机租借服务的公司。这里各位可以随意选择一款。
+
+## 域名
+
+域名可以到 [GoDaddy](https://www.godaddy.com/) 上去注册，费用十分便宜。
+
+由于 Godaddy 的域名解析在国内十分不稳定，所以建议大家到 [DNSPod](https://www.dnspod.cn/) 上进行域名解析。
+
+## 域名备案
+
+每一个申请的域名都需要进行备案，否则有可能被虚拟主机提供商封掉域名。在虚拟主机租借的网站上应该有备案的选项的。而且在你购买
+虚拟主机后，供应商会反复通知你去备案的，所以我想你应该不会忘记的。
+
+## 环境准备
+
+### 安装 php5
+
+使用以下命令安装基础的 php5 组件：
+
+    sudo apt-get install php5-cgi php5-fpm php5-mysql
+
+其中 php5-fpm 是用于处理 nginx 发送过来的 php 文件的，因为 nginx 本身是不处理 php 的，所以需要委托给 php5-fpm 处理。
+
+### 安装 mysql
+
+mysql 可以直接用下面的命令安装：
+
+    sudo apt-get install mysql-server mysql-client
+
+## 下载安装 openresty
+
+在 openresty 的 [官方网站](http://openresty.org/) 上能够下载到它的安装包。
+
+在安装之前，需要先安装一些 openresty 依赖的库：
+
+- libreadline-dev
+- libncurses5-dev
+- libpcre3-dev
+- libssl-dev
+- perl
+- make
+- build-essential
+
+这些库都可以使用 apt-get 进行安装，非常方便。依赖库都安装好了之后，就可以开始安装 openresty 了。安装命令如下：
+
+    sudo apt-get install libreadline-dev libncurses5-dev libpcre3-dev libssl-dev perl make build-essential
+
+使用 tar zxvf ngx_openresty-1.9.3.1 解压缩安装包，然后进入到解压好的文件夹中，可以看到有一个 configure 的可执行文件。使用 ./configure \-\-help 能够查看它的帮助文档，这个可执行文件是用来配置 openresty 的安装参数的。一般来说，我们只需要配置 \-\-prefix 就行，这里假设我们的安装路径是 /var/local/openresty。
+
+配置好了安装参数后，就可以使用 make 和 make install 命令进行安装了。
+
+## 启动 nginx
+
+因为 openresty 可以理解为 nginx 的一个整合包，所以你可以在 /var/local/openresty 中看到 nginx 的文件夹。
+
+首先，我们先启动 nginx。进入到 /var/local/openresty/nginx/sbin ，然后用管理员身份运行 nginx ，命令如下：
+
+    sudo ./nginx
+
+这里我们先使用默认配置启动 nginx ，然后访问我们的外网 IP，看是否能够看到 nginx 的默认欢迎页面。或者使用命令行的方式进行测试：
+
+    curl http://localhost
+
+如果返回的是一段网页代码，说明 nginx 已经正常启动了。
+
+## 让 nginx 支持 php
+
+前面在介绍 php 的时候已经提到了，nginx 是不解析 php 的。所以我们需要修改 nginx 的配置文件，让 nginx 将 php 的解析工作委托给 php5-fpm。
+
+进入到 /var/local/openresty/conf ，编辑 nginx.conf 。找到这段配置并修改如下：
+
+    location / {  
+            root   html;  
+            index  index.html index.htm index.php;  
+        }  
+
+然后找到下面这段配置，并去掉注释：
+
+    #location ~ \.php$ {  
+        #    root           html;  
+        #    fastcgi_pass   127.0.0.1:9000;  
+        #    fastcgi_index  index.php;  
+        #    fastcgi_param  SCRIPT_FILENAME  /scripts$fastcgi_script_name;  
+        #    include        fastcgi_params;  
+        #}
+
+但是，仅仅去掉注释还是不行的，我们来看这个配置：
+
+    fastcgi_pass   127.0.0.1:9000;
+
+这条配置的意思是将 php 的请求转发到 127.0.0.1:9000 这个地址上，也就是发送到本机的 9000 端口上。
+
+那么我们的 php5-fpm 的配置又是什么呢？我们来看看这个文件： /etc/php5/fpm/pool.d/www.conf
+
+    ; The address on which to accept FastCGI requests.  
+    ; Valid syntaxes are:  
+    ;   'ip.add.re.ss:port'    - to listen on a TCP socket to a specific address on  
+    ;                            a specific port;  
+    ;   'port'                 - to listen on a TCP socket to all addresses on a  
+    ;                            specific port;  
+    ;   '/path/to/unix/socket' - to listen on a unix socket.  
+    ; Note: This value is mandatory.  
+    listen = /var/run/php5-fpm.sock
+
+这段配置的意思是，php5-fpm 服务可以监听一个端口，也可以监听一个 unix socket。这里默认地监听了 /var/run/php5-fpm.sock 这个socket。
+
+这样我们就知道 php 解析不了的原因了。nginx 配置的是转发到 9000 端口，而php5-fpm 服务监听的却是 socket。我们只需要将这两者修改成一致，然后让 nginx 重载配置文件。
+这里我们修改 nginx.conf。将 fastcgi_pass 的值改为 /var/run/php5-fpm.sock 即可。然后我们让 nginx 重新载入配置文件。进入到 /var/local/openresty/nginx/sbin 中，运行
+
+    sudo ./nginx -s reload
+
+一般来说，到这里会出现报错，报错的内容是无法连接到 socket。这个问题的原因是 nginx 进程没有访问 socket 的权限。通过查看 nginx 进程的拥有者和 php5-fpm.sock 的所有者可以发现，默认情况下，php5-fpm.sock 的所有者是 www-data。那么，我们只需要将 nginx 的运行用户也改为 www-data 即可。修改 nginx.conf ：
+
+    user  www-data;
+
+然后重新加载 nginx.conf 。在 html 文件夹下编写一个 index.php 文件，文件内容如下：
+
+    <? php
+        echo phpinfo();
+    ?>
+
+然后在浏览器中访问这个 php 文件。这时会提示：
+
+    file not found
+
+这是怎么回事呢？试试访问 index.html，又能够访问，那就说明我们配置 nginx 的 php 还有问题。我们来看这里：
+
+    #location ~ \.php$ {
+        #    root           html;
+        #    fastcgi_pass   /var/run/php5-fpm.sock;
+        #    fastcgi_index  index.php;
+        #    fastcgi_param  SCRIPT_FILENAME  /scripts$fastcgi_script_name;
+        #    include        fastcgi_params;
+        #}
+
+
+参数中有一行是这样的：
+
+    fastcgi_param  SCRIPT_FILENAME  /scripts$fastcgi_script_name;
+
+这行配置表示将 php 委托出去的时候带的参数。很明显，后面的值就是脚本文件的位置。这里写的是根目录下的 scripts ，很明显我们的 php 文件不是放在这里的。
+
+将这行配置修改为下面这样：
+
+    fastcgi_param  SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+
+然后重新加载配置，访问刚才创建的 index.php。这个时候，是不是就可以看到一个现实 php 配置信息的页面？如果能够看到，那么恭喜你，php 解析成功了。随便检查一下配置信息中有没有 mysql 的配置，如果没有找到，说明 php 还没有加载 mysql 组件。
+
+**如果很不幸地**，你没有在 php 的配置信息中找到 mysql，那么请先确保已经安装了 php5-mysql，然后重启 nginx。
+
+## 安装 wordpress
+
+首先我们先到 wordpress 的 [官网](https://wordpress.org/download/) 上去下载最新的 wordpress，然后将它解压到 /var/local/wordpress。
+
+**注意**，这里需要将 wordpress 的所有者修改为 www-data ，否则后面在初始化 wordpress 和上传文件时会出现没有权限的问题。
+
+修改 nginx.conf，将脚本的根目录指向到 wordpress。
+
+    location / {
+            root   /var/local/wordpress;
+            index  index.html index.htm index.php;
+        }
+
+    location ~ \.php$ {
+            root           /var/local/wordpress;
+            fastcgi_pass   unix:/var/run/php5-fpm.sock;
+            fastcgi_index  index.php;
+            fastcgi_param  SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+            include        fastcgi_params;
+        }
+
+在安装 wordpress 之前，我们需要先在数据库中为 wordpress 创建一个库和一个用户。
+
+运行以下命令，并输入密码后进入 mysql。
+
+    mysql -u root -p
+
+然后创建用户和库。最后访问 http://localhost/wp-admin/install.php ，按照指引就能完成 wordpress 的初始化。
+
+
+
+
