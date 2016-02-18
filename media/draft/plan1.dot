@@ -1,0 +1,34 @@
+digraph {
+    rankdir=LR
+
+    start[label="start"]
+
+    subgraph cluster_route1{
+        label="path1"
+
+        route1_A[image="slow.png" shape="box"]
+        route1_B[image="medium.png" shape="box"]
+        route1_C[image="slow.png" shape="box"]
+
+        route1_A -> route1_B
+        route1_B -> route1_C
+    }
+
+    subgraph cluster_route2{
+        label="path1"
+
+        route2_A[image="medium.png" shape="box"]
+        route2_B[image="fast.png" shape="box"]
+        route2_C[image="medium.png" shape="box"]
+
+        route2_A -> route2_B
+        route2_B -> route2_C
+    }
+
+    end[label="end"]
+
+    start -> route1_A
+    start -> route2_A
+    route1_C -> end
+    route2_C -> end
+}
