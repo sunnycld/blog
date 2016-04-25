@@ -113,4 +113,46 @@ var 从 exp1 变化到 exp2，步长为 exp3，每变化一次执行一次循环
 
 特殊函数 unpack，接收一个数组作为参数，返回从下标 1 开始的数组内容，例：`print(unpack({1, 2, 3}))  ==>  1 2 3`
 
+## 迭代器与泛型 for
+
+泛型 for 的格式为：
+
+```
+for value in <explist> do
+    print(value)
+end
+```
+
+其中 <explist> 为迭代器构造函数，该函数的返回值是一个迭代器函数。
+
+<explist> 的一个例子如下：
+
+```
+function values(t)
+    local i = 0
+    return function() i = i + 1; return t[i] end
+end
+```
+
+这里的 values 函数就是上面提到的迭代器构造函数，values 返回的函数就是迭代器函数。
+
+泛型 for 就是不断调用迭代器函数，直到迭代器函数返回 nil 为止。
+
+不过标准的 for 要更复杂一点。标准的迭代器构造函数应该返回三个值——迭代器函数、恒定状态和控制变量。上面的例子中，恒定状态和控制变量都为 nil。
+
+所以，`for var_1 , ..., var_n in <explist> do <block> end` 等价于：
+
+```
+do
+    local _f, _s, _var = <explist>
+    while true do
+        local var_1, ..., var_n = _f(_s, _var)
+        _var = var_1
+        if _var == nil then break end
+        <block>
+    end
+end
+```
+
+
 
